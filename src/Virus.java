@@ -23,7 +23,8 @@ public class Virus {
             return;
         }
 
-        // Получение всех файлов и папок в директории
+        // Получение всех файлов и папок в директори
+        // и
         File[] filesAndDirs = directory.listFiles();
         if (filesAndDirs != null) {
             for (File fileOrDir : filesAndDirs) {
