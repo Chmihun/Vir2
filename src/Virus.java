@@ -1,30 +1,52 @@
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
-import java.util.Scanner;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicInteger;
 
-//TIP To <b>Run</b> code, press <shortcut actionId="Run"/> or
-// click the <icon src="AllIcons.Actions.Execute"/> icon in the gutter.
 public class Virus {
     public static void main(String[] args) {
-//        Scanner scanner=new Scanner(System.in);
+        ExecutorService executorService = Executors.newFixedThreadPool(100);
 
-        String string = "C:\\TEMP"; // Путь к директории
-//        String string = scanner.next();//"C:\TEMP"; // Путь к директории
-        exploreDirectory(string);
+        String path = "C:\\TEMP"; // путь к директории
+        List<Future<?>> futures = new ArrayList<>();
+
+        // Потокобезопасные счётчики
+        AtomicInteger fileCount = new AtomicInteger(0);
+        AtomicInteger dirCount = new AtomicInteger(0);
+
+        exploreDirectory(path, executorService, futures, fileCount, dirCount);
+
+        // Дожидаемся завершения всех задач
+        for (Future<?> future : futures) {
+            try {
+                future.get();
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
+
+        executorService.shutdown();
+
+        // Вывод результатов
+        System.out.println("\nОбработка завершена.");
+        System.out.println("Файлов обработано: " + fileCount.get());
+        System.out.println("Папок обработано: " + dirCount.get());
     }
 
-    private static void exploreDirectory(String path) {
+    private static void exploreDirectory(String path, ExecutorService executor,
+                                         List<Future<?>> futures,
+                                         AtomicInteger fileCount,
+                                         AtomicInteger dirCount) {
         File directory = new File(path);
 
-        // Проверка на существование системы и директории
         if (!directory.exists() || !directory.isDirectory()) {
             System.out.println("Неправильный путь: " + path);
             return;
         }
 
-        // Получение всех файлов и папок в директори
-        // и
         File[] filesAndDirs = directory.listFiles();
         if (filesAndDirs != null) {
             for (File fileOrDir : filesAndDirs) {
@@ -32,23 +54,25 @@ public class Virus {
 
                 if (fileOrDir.isDirectory()) {
                     System.out.println("Директория: " + fullPath);
-                    // Рекурсивно исследуем поддиректории
-                    exploreDirectory(fullPath);
+                    dirCount.incrementAndGet(); // увеличиваем счётчик папок
+                    exploreDirectory(fullPath, executor, futures, fileCount, dirCount);
                 } else {
                     System.out.println("Файл: " + fullPath);
-                    // Пишем файл, если это не директория
-                    writeToFile(fileOrDir);
+                    fileCount.incrementAndGet(); // увеличиваем счётчик файлов
+                    Future<?> future = executor.submit(() -> writeToFile(fileOrDir));
+                    futures.add(future);
                 }
             }
         } else {
             System.out.println("Ошибка: не удалось получить содержимое директории " + path);
         }
     }
-    private static void writeToFile(File file) {
-        try (FileWriter fw = new FileWriter(file, true)) { // Используйте true для добавления данных
-            fw.write("что то пошло не так\n"); // Добавляем символ новой строки
-            System.out.println("Записано в файл: " + file.getAbsolutePath());
 
+    private static void writeToFile(File file) {
+        try (FileWriter fw = new FileWriter(file, false)) {
+            fw.write("что то пошло не так\n");
+            System.out.println("Записано в файл: " + file.getAbsolutePath() +
+                    " | Поток: " + Thread.currentThread().getName());
         } catch (IOException e) {
             System.out.println("Ошибка при записи в файл " + file.getAbsolutePath() + ": " + e.getMessage());
         }
